@@ -294,6 +294,69 @@ class LtiNrpsContextMembershipViewsetTestCase(LtiNrpsTestCase):
         self.assertIn('email', member_fields)
         self.assertIn('name', member_fields)
 
+    @patch('lti_consumer.plugin.views.get_lti_pii_sharing_state_for_course', return_value=True)
+    @patch(
+        'lti_consumer.plugin.views.compat.get_course_members',
+        Mock(side_effect=patch_get_memberships({
+            'student': 4
+        })),
+    )
+    def test_get_with_pii_with_extended(self, expose_pii_fields_patcher):
+        """
+        Test context membership endpoint with extended PII enabled.
+        """
+        self._set_lti_token('https://purl.imsglobal.org/spec/lti-nrps/scope/contextmembership.readonly')
+        course_name = str(self.lti_config.location.course_key.course)
+        with self.settings(LTI_EXTENDED_PII_COURSES=[str(course_name)]):
+            response = self.client.get(self.context_membership_endpoint)
+
+        self.assertEqual(response.data['id'], 'http://testserver{}'.format(self.context_membership_endpoint))
+        self.assertEqual(len(response.data['members']), 4)
+        self.assertEqual(response.has_header('Link'), False)
+
+        expose_pii_fields_patcher.assert_called()
+
+        # All PII fields + 'given_name' and 'family_name' should be present.
+        member_fields = response.data['members'][0].keys()
+        self.assertIn('user_id', member_fields)
+        self.assertIn('roles', member_fields)
+        self.assertIn('status', member_fields)
+        self.assertIn('email', member_fields)
+        self.assertIn('name', member_fields)
+        self.assertIn('given_name', member_fields)
+        self.assertIn('family_name', member_fields)
+
+    @patch('lti_consumer.plugin.views.get_lti_pii_sharing_state_for_course', return_value=True)
+    @patch(
+        'lti_consumer.plugin.views.compat.get_course_members',
+        Mock(side_effect=patch_get_memberships({
+            'student': 4
+        })),
+    )
+    def test_get_with_pii_without_extended(self, expose_pii_fields_patcher):
+        """
+        Test context membership endpoint without extended PII enabled (but with regular PII).
+        """
+        self._set_lti_token('https://purl.imsglobal.org/spec/lti-nrps/scope/contextmembership.readonly')
+        with self.settings(LTI_EXTENDED_PII_COURSES=[]):
+            response = self.client.get(self.context_membership_endpoint)
+
+        self.assertEqual(response.data['id'], 'http://testserver{}'.format(self.context_membership_endpoint))
+        self.assertEqual(len(response.data['members']), 4)
+        self.assertEqual(response.has_header('Link'), False)
+
+        expose_pii_fields_patcher.assert_called()
+
+        # 'given_name' and 'family_name' should NOT be present.
+        member_fields = response.data['members'][0].keys()
+        self.assertIn('user_id', member_fields)
+        self.assertIn('roles', member_fields)
+        self.assertIn('status', member_fields)
+        self.assertIn('email', member_fields)
+        self.assertIn('name', member_fields)
+        self.assertNotIn('given_name', member_fields)
+        self.assertNotIn('family_name', member_fields)
+
     @patch('lti_consumer.plugin.views.get_lti_pii_sharing_state_for_course', Mock(return_value=False))
     @patch(
         'lti_consumer.plugin.views.compat.get_course_members',

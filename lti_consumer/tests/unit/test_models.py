@@ -441,3 +441,14 @@ class TestLTIConsumerHideFieldsFlag(TestCase):
             enabled_for_course=False
         ):
             self.assertFalse(CourseAllowPIISharingInLTIFlag.lti_access_to_learners_editable(self.course_id, False))
+
+@ddt.ddt
+class TestLTIConsumerInferUniqueNameFlag(TestCase):
+    """
+    Tests the behavior of the flags for lti consumer fields' editing feature.
+    These are set via Django admin settings.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.course_id = CourseLocator(org="edx", course="course", run="run")

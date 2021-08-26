@@ -410,6 +410,23 @@ class LtiNrpsContextMemberPIISerializer(LtiNrpsContextMemberBasicSerializer):
     email = serializers.EmailField(required=False)
 
 
+class LtiNrpsContextMemberExtendedPIISerializer(LtiNrpsContextMemberPIISerializer):
+    """
+    Personally identifiable information serializer for Context Member with added
+    'given_name' and 'family_name' fields which populate with predictable but phony
+    values. The family name is always single space, while the given name is
+    the part of the user's email address preceding the '@' sign.
+    """
+    given_name = serializers.SerializerMethodField('contrive_given_name')
+    family_name = serializers.SerializerMethodField('contrive_family_name')
+
+    def contrive_given_name(self, obj):
+        return obj['email'].split('@')[0]
+
+    def contrive_family_name(self, _):
+        return ' '
+
+
 # pylint: disable=abstract-method
 class LtiNrpsContextMembershipBasicSerializer(serializers.Serializer):
     """
@@ -426,3 +443,12 @@ class LtiNrpsContextMembershipPIISerializer(LtiNrpsContextMembershipBasicSeriali
     Serializer for a LTI NRPS Context Memberships Endpoint Response with PII fields
     """
     members = LtiNrpsContextMemberPIISerializer(many=True)
+
+
+# pylint: disable=abstract-method
+class LtiNrpsContextMembershipExtendedPIISerializer(LtiNrpsContextMembershipBasicSerializer):
+    """
+    Serializer for a LTI NRPS Context Memberships Endpoint Response with extended
+    PII fields (including 'given_name' and 'full_name').
+    """
+    members = LtiNrpsContextMemberExtendedPIISerializer(many=True)

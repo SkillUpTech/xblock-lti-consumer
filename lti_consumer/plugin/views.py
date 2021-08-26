@@ -2,9 +2,11 @@
 LTI consumer plugin passthrough views
 """
 import logging
+import re
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
+from django.conf import settings
 from django.http import JsonResponse, Http404
 from django.db import transaction
 from django.views.decorators.csrf import csrf_exempt
@@ -38,6 +40,7 @@ from lti_consumer.lti_1p3.extensions.rest_framework.serializers import (
     LtiAgsResultSerializer,
     LtiNrpsContextMembershipBasicSerializer,
     LtiNrpsContextMembershipPIISerializer,
+    LtiNrpsContextMembershipExtendedPIISerializer,
 )
 from lti_consumer.lti_1p3.extensions.rest_framework.permissions import (
     LtiAgsPermissions,
@@ -61,6 +64,8 @@ from lti_consumer.utils import _
 
 
 log = logging.getLogger(__name__)
+
+EXTENDED_PII_SETTING = 'LTI_EXTENDED_PII_COURSES'
 
 
 def user_has_staff_access(user, course_key):
@@ -463,12 +468,23 @@ class LtiNrpsContextMembershipViewSet(viewsets.ReadOnlyModelViewSet):
     def get_serializer_class(self):
         """
         Overrides ModelViewSet's `get_serializer_class` method.
-        Checks if PII fields can be exposed and returns appropiate serializer.
+        Checks if PII fields can be exposed, and if so, whether the administrator
+        has requested that additional computed fields be generated and sent to the
+        LTI application. Returns appropiate serializer accordingly.
         """
-        if get_lti_pii_sharing_state_for_course(self.request.lti_configuration.location.course_key):
-            return LtiNrpsContextMembershipPIISerializer
-        else:
-            return LtiNrpsContextMembershipBasicSerializer
+        course_key = self.request.lti_configuration.location.course_key
+        serializer = LtiNrpsContextMembershipBasicSerializer
+        if get_lti_pii_sharing_state_for_course(course_key):
+            serializer = LtiNrpsContextMembershipPIISerializer
+            if hasattr(settings, EXTENDED_PII_SETTING):
+                # Allow a list of regular expressions to be specified in django
+                # settings which, when matched against a course key, cause
+                # additional computed fields to be sent to the LTI application.
+                # (Has no effect unless PII transfer is enabled for the course).
+                extended_pii_courses = getattr(settings, EXTENDED_PII_SETTING)
+                if any(re.match(pattern, course_key.course) for pattern in extended_pii_courses):
+                    serializer = LtiNrpsContextMembershipExtendedPIISerializer
+        return serializer
 
     def list(self, *args, **kwargs):
         """
